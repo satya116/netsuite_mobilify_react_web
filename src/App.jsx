@@ -31,8 +31,8 @@ function App() {
     }
   }, [theme]);
 
-  const openBuilder = (functionType) =>
-    setPage({ type: "builder", functionType });
+  const openBuilder = (functionType, config = null) =>
+    setPage({ type: "builder", functionType, config });
   const openFunctions = (functionType) =>
     setPage({ type: "functions", functionType });
   const returnHome = () => setPage({ type: "home" });
@@ -76,8 +76,12 @@ function App() {
   if (page.type === "builder") {
     content = (
       <FunctionBuilder
-        key={page.functionType}
+        key={`${page.functionType}:${page.config?._id || "new"}`}
         functionType={page.functionType}
+        config={page.config}
+        onSaved={() => {
+          setPage({ type: "functions", functionType: page.functionType });
+        }}
         onBack={returnHome}
       />
     );
@@ -86,6 +90,7 @@ function App() {
       <SavedFunctions
         key={page.functionType}
         functionType={page.functionType}
+        onEdit={(config) => openBuilder(page.functionType, config)}
         onBack={returnHome}
       />
     );
@@ -252,11 +257,11 @@ function FunctionGroup({ title, subtitle, items, query, onSelect, mode }) {
   );
 }
 
-function FunctionBuilder({ functionType, onBack }) {
+function FunctionBuilder({ functionType, config, onBack, onSaved }) {
   const typeInfo =
     FUNCTION_TYPES.find((item) => item.id === functionType) ||
     FUNCTION_TYPES[0];
-  const [functionName, setFunctionName] = useState("");
+  const [functionName, setFunctionName] = useState(config?.functionName || "");
   const [recordTypes, setRecordTypes] = useState([]);
   const [recordType, setRecordType] = useState(null);
   const [recordSearch, setRecordSearch] = useState("");
@@ -264,7 +269,7 @@ function FunctionBuilder({ functionType, onBack }) {
   const [fields, setFields] = useState([]);
   const selectedIds = useRef(new Set());
   const fieldRequestId = useRef(0);
-  const [filteredBy, setFilteredBy] = useState("");
+  const [filteredBy, setFilteredBy] = useState(config?.filteredBy || "");
   const [fieldQuery, setFieldQuery] = useState("");
   const [loadingTypes, setLoadingTypes] = useState(true);
   const [loadingFields, setLoadingFields] = useState(false);
@@ -272,7 +277,7 @@ function FunctionBuilder({ functionType, onBack }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [selectedCount, setSelectedCount] = useState(0);
-  const [selectionRevision, setSelectionRevision] = useState(0);
+  const [selectedFieldIds, setSelectedFieldIds] = useState([]);
   const recordMenuRef = useRef(null);
 
   useEffect(() => {
@@ -280,9 +285,8 @@ function FunctionBuilder({ functionType, onBack }) {
     apiRequest("/function-builder/record-types")
       .then((data) => {
         const records = Array.isArray(data) ? data : data?.recordTypes || [];
-        if (mounted)
-          setRecordTypes(
-            records
+        if (mounted) {
+          const normalizedRecords = records
               .map((record) => ({
                 id: String(
                   record.id ??
@@ -295,8 +299,16 @@ function FunctionBuilder({ functionType, onBack }) {
                   record.label ?? record.text ?? record.name ?? record.id ?? "",
                 ),
               }))
-              .filter((record) => record.id),
-          );
+              .filter((record) => record.id);
+          setRecordTypes(normalizedRecords);
+          if (config) {
+            const savedRecord = normalizedRecords.find(
+              (record) => record.id === String(config.recordType),
+            );
+            if (savedRecord) loadFields(savedRecord, false);
+            else setError("The saved record type is not in the metadata cache.");
+          }
+        }
       })
       .catch((requestError) => {
         if (mounted)
@@ -308,7 +320,9 @@ function FunctionBuilder({ functionType, onBack }) {
     return () => {
       mounted = false;
     };
-  }, []);
+  // Preload only when editing a different saved configuration.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config]);
 
   useEffect(() => {
     const closeMenu = (event) => {
@@ -319,15 +333,17 @@ function FunctionBuilder({ functionType, onBack }) {
     return () => document.removeEventListener("mousedown", closeMenu);
   }, []);
 
-  const loadFields = async (selectedRecord) => {
+  async function loadFields(selectedRecord, clearSelection = true) {
     const requestId = ++fieldRequestId.current;
     setRecordType(selectedRecord);
     setRecordSearch(selectedRecord.label);
     setRecordMenuOpen(false);
-    setFilteredBy("");
-    selectedIds.current.clear();
-    setSelectedCount(0);
-    setSelectionRevision((revision) => revision + 1);
+    if (clearSelection) {
+      setFilteredBy("");
+      selectedIds.current.clear();
+      setSelectedFieldIds([]);
+      setSelectedCount(0);
+    }
     setFields([]);
     setError("");
     setLoadingFields(true);
@@ -347,15 +363,21 @@ function FunctionBuilder({ functionType, onBack }) {
             .filter((field) => field.id)
         : [];
       setFields(nextFields);
-      nextFields.forEach((field) => selectedIds.current.add(field.id));
-      setSelectedCount(nextFields.length);
+      selectedIds.current.clear();
+      const savedIds = new Set((config?.fields || []).map((field) => String(field.id)));
+      nextFields.forEach((field) => {
+        if (!config || savedIds.has(field.id)) selectedIds.current.add(field.id);
+      });
+      setSelectedFieldIds([...selectedIds.current]);
+      setSelectedCount(selectedIds.current.size);
+      if (config) setFilteredBy(config.filteredBy || "");
     } catch (requestError) {
       if (requestId === fieldRequestId.current)
         setError(`Unable to load fields: ${requestError.message}`);
     } finally {
       if (requestId === fieldRequestId.current) setLoadingFields(false);
     }
-  };
+  }
 
   const filteredRecords = useMemo(
     () =>
@@ -378,6 +400,7 @@ function FunctionBuilder({ functionType, onBack }) {
   const toggleField = (id, checked) => {
     if (checked) selectedIds.current.add(id);
     else selectedIds.current.delete(id);
+    setSelectedFieldIds([...selectedIds.current]);
     setSelectedCount(selectedIds.current.size);
   };
 
@@ -397,8 +420,12 @@ function FunctionBuilder({ functionType, onBack }) {
           type,
           isMandatory,
         }));
-      await apiRequest("/function-builder/functions", {
-        method: "POST",
+      await apiRequest(
+        config
+          ? `/function-builder/functions/${encodeURIComponent(config._id)}`
+          : "/function-builder/functions",
+        {
+        method: config ? "PUT" : "POST",
         body: JSON.stringify({
           functionName: functionName.trim(),
           functionType,
@@ -407,8 +434,9 @@ function FunctionBuilder({ functionType, onBack }) {
           fields: selectedFields,
         }),
       });
-      setNotice(`${typeInfo.title} function configuration saved.`);
-      setFunctionName("");
+      setNotice(`${typeInfo.title} function configuration ${config ? "updated" : "saved"}.`);
+      if (config) onSaved?.();
+      else setFunctionName("");
     } catch (requestError) {
       setError(`Unable to save function: ${requestError.message}`);
     } finally {
@@ -424,7 +452,7 @@ function FunctionBuilder({ functionType, onBack }) {
       <div className="page-title-row">
         <div>
           <p className="eyebrow">FUNCTION CONFIGURATION</p>
-          <h1>Create {typeInfo.title} Function</h1>
+          <h1>{config ? "Edit" : "Create"} {typeInfo.title} Function</h1>
           <p className="muted">
             Choose the record fields this function will use.
           </p>
@@ -469,8 +497,8 @@ function FunctionBuilder({ functionType, onBack }) {
                 setFields([]);
                 setFilteredBy("");
                 selectedIds.current.clear();
+                setSelectedFieldIds([]);
                 setSelectedCount(0);
-                setSelectionRevision((revision) => revision + 1);
                 setRecordMenuOpen(true);
               }}
               placeholder={
@@ -537,7 +565,7 @@ function FunctionBuilder({ functionType, onBack }) {
                 </>
               ) : (
                 <>
-                  Save {typeInfo.title} function <span>→</span>
+              {config ? "Update" : "Save"} {typeInfo.title} function <span>→</span>
                 </>
               )}
             </button>
@@ -578,8 +606,8 @@ function FunctionBuilder({ functionType, onBack }) {
                 className="text-button"
                 onClick={() => {
                   fields.forEach((field) => selectedIds.current.add(field.id));
+                  setSelectedFieldIds([...selectedIds.current]);
                   setSelectedCount(fields.length);
-                  setSelectionRevision((revision) => revision + 1);
                 }}
               >
                 Select all
@@ -589,8 +617,8 @@ function FunctionBuilder({ functionType, onBack }) {
                 className="text-button"
                 onClick={() => {
                   selectedIds.current.clear();
+                  setSelectedFieldIds([]);
                   setSelectedCount(0);
-                  setSelectionRevision((revision) => revision + 1);
                 }}
               >
                 Clear
@@ -616,9 +644,9 @@ function FunctionBuilder({ functionType, onBack }) {
             <div className="fields-list">
               {filteredFields.map((field) => (
                 <FieldRow
-                  key={`${recordType.id}:${field.id}:${selectionRevision}`}
+                  key={`${recordType.id}:${field.id}`}
                   field={field}
-                  checked={selectedIds.current.has(field.id)}
+                  checked={selectedFieldIds.includes(field.id)}
                   onChange={toggleField}
                 />
               ))}
@@ -661,7 +689,7 @@ function FieldRow({ field, checked, onChange }) {
   );
 }
 
-function SavedFunctions({ functionType, onBack }) {
+function SavedFunctions({ functionType, onBack, onEdit }) {
   const typeInfo =
     FUNCTION_TYPES.find((item) => item.id === functionType) ||
     FUNCTION_TYPES[0];
@@ -688,6 +716,8 @@ function SavedFunctions({ functionType, onBack }) {
   }, [functionType, typeInfo.title]);
 
   useEffect(() => {
+    // Loading is asynchronous; state updates happen when the API request resolves.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadFunctions();
   }, [loadFunctions]);
   const filtered = functions.filter((item) =>
@@ -752,11 +782,7 @@ function SavedFunctions({ functionType, onBack }) {
       ) : (
         <div className="saved-list">
           {filtered.map((item) => (
-            <button
-              className="saved-item"
-              key={item._id}
-              onClick={() => setSelectedFunction(item)}
-            >
+            <div className="saved-item" key={item._id}>
               <span className={`tile-icon icon-${functionType}`}>
                 {typeInfo.icon}
               </span>
@@ -767,8 +793,19 @@ function SavedFunctions({ functionType, onBack }) {
                   {item.filteredBy ? ` · filtered by ${item.filteredBy}` : ""}
                 </small>
               </span>
-              <span className="tile-arrow">›</span>
-            </button>
+              <div className="saved-actions">
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => setSelectedFunction(item)}
+                >View</button>
+                <button
+                  type="button"
+                  className="text-button"
+                  onClick={() => onEdit(item)}
+                >Edit</button>
+              </div>
+            </div>
           ))}
         </div>
       )}

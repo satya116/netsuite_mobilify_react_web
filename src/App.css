@@ -117,6 +117,8 @@ h1 { margin-bottom: 7px; font-size: clamp(25px, 3vw, 31px); line-height: 1.2; fo
 .saved-item { width: 100%; min-height: 72px; display: flex; align-items: center; gap: 13px; padding: 12px 15px; border: 0; border-bottom: 1px solid #edf0f4; background: #fff; text-align: left; cursor: pointer; }
 .saved-item:last-child { border-bottom: 0; }
 .saved-item:hover { background: #f9fbfe; }
+.saved-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 12px; margin-left: auto; }
+.saved-actions .text-button { white-space: nowrap; }
 .list-empty { min-height: 290px; border: 1px dashed #dce3ec; border-radius: 9px; background: #fff; }
 .icon-button { width: 36px; height: 36px; display: grid; place-items: center; border: 1px solid #e1e6ed; border-radius: 7px; background: #fff; color: #53627a; font-size: 21px; cursor: pointer; }
 .detail-panel { margin-top: 18px; padding: 18px; border: 1px solid #e2e8f0; border-radius: 9px; background: #fff; }

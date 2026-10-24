@@ -3,8 +3,30 @@ import { apiRequest } from "../services/api.js";
 
 function formatCell(value) {
   if (value === null || value === undefined) return "-";
-  if (typeof value === "object") return value.text ?? value.value ?? "-";
+  if (Array.isArray(value)) {
+    return value.map(formatCell).filter((item) => item !== "-").join(", ") || "-";
+  }
+  if (typeof value === "object") {
+    if (value.text !== null && value.text !== undefined && value.text !== "") {
+      return formatCell(value.text);
+    }
+    if (value.value !== null && value.value !== undefined) {
+      return formatCell(value.value);
+    }
+    return "-";
+  }
   return String(value);
+}
+
+function getFieldValue(row, field) {
+  return (
+    row?.[field.id] ??
+    row?.values?.[field.id] ??
+    row?.fields?.[field.id] ??
+    row?.[field.label] ??
+    row?.values?.[field.label] ??
+    null
+  );
 }
 
 export default function ViewFunctionRunner({ config }) {
@@ -28,7 +50,8 @@ export default function ViewFunctionRunner({ config }) {
           body: JSON.stringify({ filterValue }),
         },
       );
-      setResults(Array.isArray(data.results) ? data.results : []);
+      const payload = data?.data || data?.result || data;
+      setResults(Array.isArray(payload?.results) ? payload.results : []);
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -76,9 +99,9 @@ export default function ViewFunctionRunner({ config }) {
                 <tbody>
                   {results.map((row, index) => (
                     <tr key={`${row.id || "record"}-${index}`}>
-                      <td>{row.id || "-"}</td>
+                      <td>{formatCell(row.id ?? row.internalid ?? row.internalId)}</td>
                       {fields.map((field) => (
-                        <td key={field.id}>{formatCell(row[field.id])}</td>
+                        <td key={field.id}>{formatCell(getFieldValue(row, field))}</td>
                       ))}
                     </tr>
                   ))}
