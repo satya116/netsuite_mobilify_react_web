@@ -1,9 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { apiRequest } from "./services/api.js";
+import MetadataCacheRefresh from "./components/MetadataCacheRefresh.jsx";
 import "./App.css";
 
-const API_BASE = (
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000"
-).replace(/\/$/, "");
 const FUNCTION_TYPES = [
   { id: "view", title: "View", subtitle: "Single record screen", icon: "◉" },
   { id: "create", title: "Create", subtitle: "New record form", icon: "+" },
@@ -11,36 +10,25 @@ const FUNCTION_TYPES = [
   { id: "edit", title: "Edit", subtitle: "Update record fields", icon: "✎" },
 ];
 
-async function apiRequest(path, options = {}) {
-  const { headers = {}, ...requestOptions } = options;
-  const response = await fetch(`${API_BASE}${path}`, {
-    ...requestOptions,
-    headers: {
-      Accept: "application/json",
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...headers,
-    },
-  });
-  const body = await response.text();
-  let data;
-  try {
-    data = body ? JSON.parse(body) : null;
-  } catch {
-    data = body;
-  }
-  if (!response.ok)
-    throw new Error(
-      data?.error ||
-        data?.message ||
-        body ||
-        `Request failed (${response.status})`,
-    );
-  return data;
-}
-
 function App() {
   const [activeTab, setActiveTab] = useState("Home");
   const [page, setPage] = useState({ type: "home" });
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem("mobilify-theme") === "dark" ? "dark" : "light";
+    } catch {
+      return "light";
+    }
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try {
+      localStorage.setItem("mobilify-theme", theme);
+    } catch {
+      // Theme remains active for this session when storage is unavailable.
+    }
+  }, [theme]);
 
   const openBuilder = (functionType) =>
     setPage({ type: "builder", functionType });
@@ -103,7 +91,7 @@ function App() {
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-theme={theme}>
       <header className="topbar">
         <button
           className="brand"
@@ -123,6 +111,14 @@ function App() {
           <span className="connection-status">
             <i /> API workspace
           </span>
+          <button
+            className="theme-toggle"
+            onClick={() => setTheme((current) => current === "light" ? "dark" : "light")}
+            aria-label={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+            title={`Switch to ${theme === "light" ? "dark" : "light"} mode`}
+          >
+            {theme === "light" ? "☾" : "☀"}
+          </button>
           <button
             className="avatar"
             aria-label="Profile"
@@ -169,7 +165,7 @@ function HomeScreen({ openBuilder, openFunctions }) {
           <h1>Good to see you</h1>
           <p className="muted">Build and use your NetSuite mobile functions.</p>
         </div>
-        <div className="date-chip">Function workspace</div>
+        <MetadataCacheRefresh />
       </div>
 
       <label className="search-box">
