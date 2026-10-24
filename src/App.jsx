@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "./services/api.js";
 import MetadataCacheRefresh from "./components/MetadataCacheRefresh.jsx";
 import ViewFunctionRunner from "./components/ViewFunctionRunner.jsx";
+import CreateFunctionRunner from "./components/CreateFunctionRunner.jsx";
+import ListFunctionRunner from "./components/ListFunctionRunner.jsx";
 import "./App.css";
 
 const FUNCTION_TYPES = [
@@ -35,12 +37,17 @@ function App() {
     setPage({ type: "builder", functionType, config });
   const openFunctions = (functionType) =>
     setPage({ type: "functions", functionType });
+  const openMetadata = () => setPage({ type: "metadata" });
   const returnHome = () => setPage({ type: "home" });
 
   const tabPages = {
     Home:
       page.type === "home" ? (
-        <HomeScreen openBuilder={openBuilder} openFunctions={openFunctions} />
+        <HomeScreen
+          openBuilder={openBuilder}
+          openFunctions={openFunctions}
+          openMetadata={openMetadata}
+        />
       ) : null,
     Search: (
       <SimpleScreen
@@ -94,6 +101,8 @@ function App() {
         onBack={returnHome}
       />
     );
+  } else if (page.type === "metadata") {
+    content = <MetadataCacheRefresh onBack={returnHome} />;
   }
 
   return (
@@ -161,7 +170,7 @@ function App() {
   );
 }
 
-function HomeScreen({ openBuilder, openFunctions }) {
+function HomeScreen({ openBuilder, openFunctions, openMetadata }) {
   const [query, setQuery] = useState("");
   return (
     <div className="home-view">
@@ -171,7 +180,9 @@ function HomeScreen({ openBuilder, openFunctions }) {
           <h1>Good to see you</h1>
           <p className="muted">Build and use your NetSuite mobile functions.</p>
         </div>
-        <MetadataCacheRefresh />
+        <button className="secondary-button" onClick={openMetadata}>
+          <span aria-hidden="true">↻</span> NetSuite Metadata
+        </button>
       </div>
 
       <label className="search-box">
@@ -208,9 +219,6 @@ function HomeScreen({ openBuilder, openFunctions }) {
         onSelect={openFunctions}
         mode="saved"
       />
-      <p className="home-footnote">
-        Record types and field details load from the Node service cache.
-      </p>
     </div>
   );
 }
@@ -846,6 +854,12 @@ function FunctionDetail({ config, onBack, inline = false }) {
       {config.functionType === "view" && config.filteredBy && (
         <ViewFunctionRunner config={config} />
       )}
+      {config.functionType === "create" && (
+        <CreateFunctionRunner config={config} />
+      )}
+      {config.functionType === "list" && (
+        <ListFunctionRunner config={config} />
+      )}
       <h3>
         Configured fields <span>{fields.length}</span>
       </h3>
@@ -865,8 +879,7 @@ function FunctionDetail({ config, onBack, inline = false }) {
         <p className="muted">No fields configured.</p>
       )}
       <p className="detail-note">
-        This screen shows the saved configuration. Record execution is handled
-        by the NetSuite RESTlet.
+        Function settings are stored with this saved configuration.
       </p>
     </div>
   );
