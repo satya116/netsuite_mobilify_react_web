@@ -133,6 +133,19 @@ h1 { margin-bottom: 7px; font-size: clamp(25px, 3vw, 31px); line-height: 1.2; fo
 .detail-field small { color: #8994a4; font-size: 9px; }
 .detail-field em { color: #748096; font-size: 9px; font-style: normal; }
 .detail-note { margin: 13px 0 0; color: #8994a4; font-size: 10px; }
+.view-runner { margin-top: 18px; padding-top: 16px; border-top: 1px solid #edf0f4; }
+.view-filter-form { display: grid; grid-template-columns: minmax(180px, 1fr) auto; align-items: end; gap: 12px; }
+.view-filter-form .form-label { margin: 0; }
+.view-filter-form .form-label > span { color: #64748b; font-weight: 500; }
+.view-results { margin-top: 18px; }
+.view-results h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 9px; font-size: 12px; }
+.view-results h3 span { color: #748096; font-size: 10px; }
+.results-table-wrap { max-width: 100%; overflow: auto; border: 1px solid #e1e6ed; border-radius: 6px; }
+.results-table { width: 100%; border-collapse: collapse; font-size: 11px; text-align: left; }
+.results-table th, .results-table td { max-width: 280px; padding: 9px 11px; border-bottom: 1px solid #e8edf2; white-space: nowrap; }
+.results-table th { background: #f4f7fa; color: #344258; font-weight: 700; }
+.results-table td { overflow: hidden; color: #3d4b60; text-overflow: ellipsis; }
+.results-table tr:last-child td { border-bottom: 0; }
 .simple-screen { min-height: 55vh; display: flex; align-items: center; justify-content: center; flex-direction: column; text-align: center; }
 .simple-screen .eyebrow { margin: 18px 0 7px; }
 .simple-screen h1 { font-size: 28px; }
@@ -213,6 +226,13 @@ h1 { margin-bottom: 7px; font-size: clamp(25px, 3vw, 31px); line-height: 1.2; fo
 .app-shell[data-theme="dark"] .saved-item:hover { background: #202e3d; }
 .app-shell[data-theme="dark"] .filter-summary { color: #b3c0d0; }
 .app-shell[data-theme="dark"] .detail-field em { color: #a2afbf; }
+.app-shell[data-theme="dark"] .view-runner { border-color: #2d3a47; }
+.app-shell[data-theme="dark"] .view-filter-form .form-label > span { color: #aebcce; }
+.app-shell[data-theme="dark"] .results-table-wrap { border-color: #354250; }
+.app-shell[data-theme="dark"] .results-table th,
+.app-shell[data-theme="dark"] .results-table td { border-color: #2d3a47; }
+.app-shell[data-theme="dark"] .results-table th { background: #202c39; color: #e0e8f1; }
+.app-shell[data-theme="dark"] .results-table td { color: #d2dce7; }
 .app-shell[data-theme="dark"] .simple-icon { background: #1a2531; }
 .app-shell[data-theme="dark"] .theme-toggle:hover { border-color: #5277b9; background: #243448; }
 .app-shell[data-theme="dark"] .cache-refresh-button { border-color: #3a4a5a; background: #1a2531; color: #e0e8f1; }
@@ -272,6 +292,7 @@ h1 { margin-bottom: 7px; font-size: clamp(25px, 3vw, 31px); line-height: 1.2; fo
 .app-shell:not([data-theme="dark"]) .record-menu button small,
 .app-shell:not([data-theme="dark"]) .record-menu p { color: #58677b; }
 .app-shell:not([data-theme="dark"]) .save-row,
+.app-shell:not([data-theme="dark"]) .view-runner,
 .app-shell:not([data-theme="dark"]) .fields-list,
 .app-shell:not([data-theme="dark"]) .field-row,
 .app-shell:not([data-theme="dark"]) .detail-heading,
@@ -279,6 +300,11 @@ h1 { margin-bottom: 7px; font-size: clamp(25px, 3vw, 31px); line-height: 1.2; fo
 .app-shell:not([data-theme="dark"]) .detail-field { border-color: #dce2e9; }
 .app-shell:not([data-theme="dark"]) .saved-item { border-color: #dce2e9; background: #fff; }
 .app-shell:not([data-theme="dark"]) .saved-item:hover { background: #f4f7fb; }
+.app-shell:not([data-theme="dark"]) .results-table-wrap { border-color: #d6dee7; }
+.app-shell:not([data-theme="dark"]) .results-table th,
+.app-shell:not([data-theme="dark"]) .results-table td { border-color: #e0e6ed; }
+.app-shell:not([data-theme="dark"]) .results-table th { background: #edf2f7; color: #243149; }
+.app-shell:not([data-theme="dark"]) .results-table td { color: #344258; }
 .app-shell:not([data-theme="dark"]) .bottom-nav { border-color: #cbd4df; background: rgba(255, 255, 255, .98); }
 .app-shell:not([data-theme="dark"]) .nav-item { color: #526177; }
 .app-shell:not([data-theme="dark"]) .nav-item.active { color: #164fb8; }
@@ -312,6 +338,8 @@ h1 { margin-bottom: 7px; font-size: clamp(25px, 3vw, 31px); line-height: 1.2; fo
   .function-tile { min-height: 66px; }
   .page-title-row { align-items: flex-start; }
   .page-title-row h1 { font-size: 24px; }
+  .view-filter-form { grid-template-columns: 1fr; }
+  .view-filter-form .primary-button { width: 100%; }
   .form-panel { padding: 15px; }
   .panel-heading { gap: 10px; }
   .save-row { align-items: stretch; flex-direction: column; }

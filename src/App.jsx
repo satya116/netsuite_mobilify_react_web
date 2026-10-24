@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "./services/api.js";
 import MetadataCacheRefresh from "./components/MetadataCacheRefresh.jsx";
+import ViewFunctionRunner from "./components/ViewFunctionRunner.jsx";
 import "./App.css";
 
 const FUNCTION_TYPES = [
@@ -804,6 +805,9 @@ function FunctionDetail({ config, onBack, inline = false }) {
         <p className="filter-summary">
           Filtered by <strong>{config.filteredBy}</strong>
         </p>
+      )}
+      {config.functionType === "view" && config.filteredBy && (
+        <ViewFunctionRunner config={config} />
       )}
       <h3>
         Configured fields <span>{fields.length}</span>
