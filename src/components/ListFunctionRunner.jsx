@@ -2,18 +2,43 @@ import { useCallback, useEffect, useState } from "react";
 import { apiRequest } from "../services/api.js";
 
 const PAGE_SIZE = 50;
+const EMPTY_FIELDS = [];
 
 function displayValue(value) {
   if (value === null || value === undefined || value === "") return "-";
   if (Array.isArray(value)) return value.map(displayValue).filter((item) => item !== "-").join(", ") || "-";
-  if (typeof value === "object") return displayValue(value.text ?? value.value);
+  if (typeof value === "object") {
+    const display = value.text !== null && value.text !== undefined && value.text !== ""
+      ? value.text
+      : value.value;
+    return display === value ? "-" : displayValue(display);
+  }
   return String(value);
 }
 
+function getFieldValue(row, field) {
+  const keys = [field.id, field.label, field.id?.toLowerCase(), field.id?.toUpperCase()]
+    .filter(Boolean);
+  for (const source of [row, row?.values, row?.fields]) {
+    if (!source) continue;
+    for (const key of keys) {
+      if (source[key] !== undefined && source[key] !== null) return source[key];
+    }
+    if (Array.isArray(source)) {
+      const match = source.find((item) =>
+        keys.includes(String(item?.id ?? item?.name ?? item?.fieldId ?? "")),
+      );
+      if (match) return match.value ?? match.text;
+    }
+  }
+  return null;
+}
+
 export default function ListFunctionRunner({ config }) {
-  const fields = Array.isArray(config.fields) ? config.fields : [];
+  const fields = Array.isArray(config.fields) ? config.fields : EMPTY_FIELDS;
   const [filterValue, setFilterValue] = useState("");
   const [results, setResults] = useState([]);
+  const [resultColumns, setResultColumns] = useState(fields);
   const [pageIndex, setPageIndex] = useState(0);
   const [hasNext, setHasNext] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -32,6 +57,8 @@ export default function ListFunctionRunner({ config }) {
       );
       const payload = data?.data || data?.result || data;
       const rows = Array.isArray(payload?.results) ? payload.results : [];
+      const columns = Array.isArray(payload?.columns) ? payload.columns : [];
+      setResultColumns(columns.length ? columns : fields);
       setResults(rows);
       setPageIndex(nextPage);
       setHasNext(rows.length === PAGE_SIZE);
@@ -42,7 +69,7 @@ export default function ListFunctionRunner({ config }) {
     } finally {
       setLoading(false);
     }
-  }, [config._id]);
+  }, [config._id, fields]);
 
   useEffect(() => {
     // Load the first page when the saved list function opens.
@@ -87,16 +114,16 @@ export default function ListFunctionRunner({ config }) {
               <thead>
                 <tr>
                   <th>Internal ID</th>
-                  {fields.map((field) => <th key={field.id}>{field.label || field.id}</th>)}
+                  {resultColumns.map((field) => <th key={field.id}>{field.label || field.id}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {results.map((row, index) => (
                   <tr key={`${row.id || "record"}-${index}`}>
                     <td>{displayValue(row.id ?? row.internalid ?? row.internalId)}</td>
-                    {fields.map((field) => (
+                    {resultColumns.map((field) => (
                       <td key={field.id}>
-                        {displayValue(row[field.id] ?? row.values?.[field.id] ?? row.fields?.[field.id] ?? row[field.label])}
+                        {displayValue(getFieldValue(row, field))}
                       </td>
                     ))}
                   </tr>

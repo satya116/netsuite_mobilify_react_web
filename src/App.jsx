@@ -4,6 +4,7 @@ import MetadataRoute from "./routes/MetadataRoute.jsx";
 import ViewFunctionRunner from "./components/ViewFunctionRunner.jsx";
 import CreateFunctionRunner from "./components/CreateFunctionRunner.jsx";
 import ListFunctionRunner from "./components/ListFunctionRunner.jsx";
+import EditFunctionRunner from "./components/EditFunctionRunner.jsx";
 import "./App.css";
 
 const FUNCTION_TYPES = [
@@ -289,6 +290,8 @@ function FunctionBuilder({ functionType, config, onBack, onSaved }) {
   const selectedIds = useRef(new Set());
   const fieldRequestId = useRef(0);
   const [filteredBy, setFilteredBy] = useState(config?.filteredBy || "");
+  const [filteredBySearch, setFilteredBySearch] = useState("");
+  const [filteredByMenuOpen, setFilteredByMenuOpen] = useState(false);
   const [fieldQuery, setFieldQuery] = useState("");
   const [loadingTypes, setLoadingTypes] = useState(true);
   const [loadingFields, setLoadingFields] = useState(false);
@@ -298,6 +301,7 @@ function FunctionBuilder({ functionType, config, onBack, onSaved }) {
   const [selectedCount, setSelectedCount] = useState(0);
   const [selectedFieldIds, setSelectedFieldIds] = useState([]);
   const recordMenuRef = useRef(null);
+  const filteredByMenuRef = useRef(null);
 
   useEffect(() => {
     let mounted = true;
@@ -322,10 +326,12 @@ function FunctionBuilder({ functionType, config, onBack, onSaved }) {
           setRecordTypes(normalizedRecords);
           if (config) {
             const savedRecord = normalizedRecords.find(
-              (record) => record.id === String(config.recordType),
-            );
-            if (savedRecord) loadFields(savedRecord, false);
-            else setError("The saved record type is not in the metadata cache.");
+              (record) => record.id.toLowerCase() === String(config.recordType).toLowerCase(),
+            ) || {
+              id: String(config.recordType),
+              label: String(config.recordType),
+            };
+            loadFields(savedRecord, false);
           }
         }
       })
@@ -345,8 +351,8 @@ function FunctionBuilder({ functionType, config, onBack, onSaved }) {
 
   useEffect(() => {
     const closeMenu = (event) => {
-      if (!recordMenuRef.current?.contains(event.target))
-        setRecordMenuOpen(false);
+      if (!recordMenuRef.current?.contains(event.target)) setRecordMenuOpen(false);
+      if (!filteredByMenuRef.current?.contains(event.target)) setFilteredByMenuOpen(false);
     };
     document.addEventListener("mousedown", closeMenu);
     return () => document.removeEventListener("mousedown", closeMenu);
@@ -354,11 +360,14 @@ function FunctionBuilder({ functionType, config, onBack, onSaved }) {
 
   async function loadFields(selectedRecord, clearSelection = true) {
     const requestId = ++fieldRequestId.current;
+    const editingSavedRecord = config &&
+      String(config.recordType).toLowerCase() === String(selectedRecord.id).toLowerCase();
     setRecordType(selectedRecord);
     setRecordSearch(selectedRecord.label);
     setRecordMenuOpen(false);
     if (clearSelection) {
       setFilteredBy("");
+      setFilteredBySearch("");
       selectedIds.current.clear();
       setSelectedFieldIds([]);
       setSelectedCount(0);
@@ -371,7 +380,7 @@ function FunctionBuilder({ functionType, config, onBack, onSaved }) {
         `/function-builder/record-types/${encodeURIComponent(selectedRecord.id)}/fields`,
       );
       if (requestId !== fieldRequestId.current) return;
-      const nextFields = Array.isArray(data?.fields)
+      const cachedFields = Array.isArray(data?.fields)
         ? data.fields
             .map((field) => ({
               id: String(field.id ?? ""),
@@ -381,18 +390,45 @@ function FunctionBuilder({ functionType, config, onBack, onSaved }) {
             }))
             .filter((field) => field.id)
         : [];
+      const cachedIds = new Set(cachedFields.map((field) => field.id));
+      const savedFields = (editingSavedRecord ? config.fields || [] : [])
+        .map((field) => ({
+          id: String(field.id ?? ""),
+          label: String(field.label ?? field.id ?? ""),
+          type: String(field.type ?? ""),
+          isMandatory: field.isMandatory === true,
+        }))
+        .filter((field) => field.id && !cachedIds.has(field.id));
+      const nextFields = [...cachedFields, ...savedFields];
       setFields(nextFields);
       selectedIds.current.clear();
-      const savedIds = new Set((config?.fields || []).map((field) => String(field.id)));
+      const savedIds = new Set((editingSavedRecord ? config.fields || [] : []).map((field) => String(field.id)));
       nextFields.forEach((field) => {
-        if (!config || savedIds.has(field.id)) selectedIds.current.add(field.id);
+        if (!editingSavedRecord || savedIds.has(field.id)) selectedIds.current.add(field.id);
       });
       setSelectedFieldIds([...selectedIds.current]);
       setSelectedCount(selectedIds.current.size);
-      if (config) setFilteredBy(config.filteredBy || "");
+      if (editingSavedRecord) {
+        const savedFilterField = nextFields.find((field) => field.id === config.filteredBy);
+        setFilteredBy(config.filteredBy || "");
+        setFilteredBySearch(savedFilterField ? `${savedFilterField.label} · ${savedFilterField.id}` : config.filteredBy || "");
+      }
     } catch (requestError) {
-      if (requestId === fieldRequestId.current)
+      if (requestId === fieldRequestId.current && editingSavedRecord) {
+        const savedFields = (config.fields || []).map((field) => ({
+          id: String(field.id ?? ""),
+          label: String(field.label ?? field.id ?? ""),
+          type: String(field.type ?? ""),
+          isMandatory: field.isMandatory === true,
+        })).filter((field) => field.id);
+        setFields(savedFields);
+        selectedIds.current = new Set(savedFields.map((field) => field.id));
+        setSelectedFieldIds([...selectedIds.current]);
+        setSelectedCount(selectedIds.current.size);
+        setError(`Unable to load current field metadata; saved fields are available for editing. ${requestError.message}`);
+      } else if (requestId === fieldRequestId.current) {
         setError(`Unable to load fields: ${requestError.message}`);
+      }
     } finally {
       if (requestId === fieldRequestId.current) setLoadingFields(false);
     }
@@ -414,6 +450,12 @@ function FunctionBuilder({ functionType, config, onBack, onSaved }) {
       ),
     [fields, fieldQuery],
   );
+  const filteredByFields = useMemo(
+    () => fields.filter((field) =>
+      `${field.label} ${field.id}`.toLowerCase().includes(filteredBySearch.toLowerCase()),
+    ),
+    [fields, filteredBySearch],
+  );
   const useFilteredBy = functionType !== "create";
 
   const toggleField = (id, checked) => {
@@ -429,6 +471,7 @@ function FunctionBuilder({ functionType, config, onBack, onSaved }) {
     setNotice("");
     if (!functionName.trim()) return setError("Enter a function name.");
     if (!recordType) return setError("Select a record type.");
+    if (functionType === "edit" && !filteredBy) return setError("Choose a filter field for this Edit function.");
     setSaving(true);
     try {
       const selectedFields = fields
@@ -515,6 +558,7 @@ function FunctionBuilder({ functionType, config, onBack, onSaved }) {
                 setRecordType(null);
                 setFields([]);
                 setFilteredBy("");
+                setFilteredBySearch("");
                 selectedIds.current.clear();
                 setSelectedFieldIds([]);
                 setSelectedCount(0);
@@ -551,22 +595,53 @@ function FunctionBuilder({ functionType, config, onBack, onSaved }) {
           </div>
 
           {useFilteredBy && (
-            <label className="form-label">
-              Filtered by
-              <select
+            <div className="form-label record-picker" ref={filteredByMenuRef}>
+              <label htmlFor="filtered-by-field">Filtered by{functionType === "edit" && <b>*</b>}</label>
+              <input
+                id="filtered-by-field"
                 className="text-input"
-                value={filteredBy}
-                onChange={(event) => setFilteredBy(event.target.value)}
+                role="combobox"
+                aria-expanded={filteredByMenuOpen}
+                aria-autocomplete="list"
+                aria-controls="filtered-by-field-options"
+                value={filteredBySearch}
+                onFocus={() => setFilteredByMenuOpen(true)}
+                onChange={(event) => {
+                  setFilteredBySearch(event.target.value);
+                  setFilteredBy("");
+                  setFilteredByMenuOpen(true);
+                }}
+                placeholder="Search fields (optional)"
                 disabled={!fields.length}
-              >
-                <option value="">Choose a field (optional)</option>
-                {fields.map((field) => (
-                  <option key={field.id} value={field.id}>
-                    {field.label} · {field.id}
-                  </option>
-                ))}
-              </select>
-            </label>
+              />
+              {filteredByMenuOpen && fields.length > 0 && (
+                <div id="filtered-by-field-options" className="record-menu" role="listbox">
+                  {functionType !== "edit" && <button
+                    type="button"
+                    role="option"
+                    aria-selected={!filteredBy}
+                    onClick={() => {
+                      setFilteredBy("");
+                      setFilteredBySearch("");
+                      setFilteredByMenuOpen(false);
+                    }}
+                  >No filter field</button>}
+                  {filteredByFields.length ? filteredByFields.map((field) => (
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={filteredBy === field.id}
+                      key={field.id}
+                      onClick={() => {
+                        setFilteredBy(field.id);
+                        setFilteredBySearch(`${field.label} · ${field.id}`);
+                        setFilteredByMenuOpen(false);
+                      }}
+                    >{field.label}<small>{field.id}</small></button>
+                  )) : <p>No matching fields.</p>}
+                </div>
+              )}
+            </div>
           )}
           <div className="save-row">
             <span className="muted">
@@ -682,19 +757,15 @@ function FunctionBuilder({ functionType, config, onBack, onSaved }) {
 }
 
 function FieldRow({ field, checked, onChange }) {
-  const [selected, setSelected] = useState(checked);
   return (
-    <label className={`field-row ${selected ? "is-selected" : ""}`}>
+    <label className={`field-row ${checked ? "is-selected" : ""}`}>
       <input
         type="checkbox"
-        checked={selected}
-        onChange={(event) => {
-          setSelected(event.target.checked);
-          onChange(field.id, event.target.checked);
-        }}
+        checked={checked}
+        onChange={(event) => onChange(field.id, event.target.checked)}
       />
       <span className="field-check" aria-hidden="true">
-        {selected ? "✓" : ""}
+        {checked ? "✓" : ""}
       </span>
       <span className="field-info">
         <strong>
@@ -870,6 +941,9 @@ function FunctionDetail({ config, onBack, inline = false }) {
       )}
       {config.functionType === "list" && (
         <ListFunctionRunner config={config} />
+      )}
+      {config.functionType === "edit" && (
+        <EditFunctionRunner config={config} />
       )}
       <h3>
         Configured fields <span>{fields.length}</span>
