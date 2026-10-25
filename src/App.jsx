@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { apiRequest } from "./services/api.js";
-import MetadataCacheRefresh from "./components/MetadataCacheRefresh.jsx";
+import MetadataRoute from "./routes/MetadataRoute.jsx";
 import ViewFunctionRunner from "./components/ViewFunctionRunner.jsx";
 import CreateFunctionRunner from "./components/CreateFunctionRunner.jsx";
 import ListFunctionRunner from "./components/ListFunctionRunner.jsx";
@@ -15,7 +15,7 @@ const FUNCTION_TYPES = [
 
 function App() {
   const [activeTab, setActiveTab] = useState("Home");
-  const [page, setPage] = useState({ type: "home" });
+  const [page, setPage] = useState(() => ({ type: window.location.pathname === "/metadata" ? "metadata" : "home" }));
   const [theme, setTheme] = useState(() => {
     try {
       return localStorage.getItem("mobilify-theme") === "dark" ? "dark" : "light";
@@ -37,8 +37,19 @@ function App() {
     setPage({ type: "builder", functionType, config });
   const openFunctions = (functionType) =>
     setPage({ type: "functions", functionType });
-  const openMetadata = () => setPage({ type: "metadata" });
-  const returnHome = () => setPage({ type: "home" });
+  const navigate = (nextPage) => {
+    const path = nextPage.type === "metadata" ? "/metadata" : "/";
+    if (window.location.pathname !== path) window.history.pushState({}, "", path);
+    setPage(nextPage);
+  };
+  const openMetadata = () => navigate({ type: "metadata" });
+  const returnHome = () => navigate({ type: "home" });
+
+  useEffect(() => {
+    const onPopState = () => setPage({ type: window.location.pathname === "/metadata" ? "metadata" : "home" });
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
 
   const tabPages = {
     Home:
@@ -80,14 +91,16 @@ function App() {
   };
 
   let content = tabPages[activeTab];
-  if (page.type === "builder") {
+  if (page.type === "metadata") {
+    content = <MetadataRoute onBack={returnHome} />;
+  } else if (page.type === "builder") {
     content = (
       <FunctionBuilder
         key={`${page.functionType}:${page.config?._id || "new"}`}
         functionType={page.functionType}
         config={page.config}
         onSaved={() => {
-          setPage({ type: "functions", functionType: page.functionType });
+          navigate({ type: "functions", functionType: page.functionType });
         }}
         onBack={returnHome}
       />
@@ -101,8 +114,6 @@ function App() {
         onBack={returnHome}
       />
     );
-  } else if (page.type === "metadata") {
-    content = <MetadataCacheRefresh onBack={returnHome} />;
   }
 
   return (

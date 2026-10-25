@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { apiRequest } from "../services/api.js";
+import { apiRequest, apiStreamRequest } from "../services/api.js";
 
 export default function MetadataCacheRefresh({ onBack }) {
   const [recordTypes, setRecordTypes] = useState([]);
@@ -9,6 +9,7 @@ export default function MetadataCacheRefresh({ onBack }) {
   const [loadingTypes, setLoadingTypes] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [result, setResult] = useState(null);
+  const [progress, setProgress] = useState(null);
   const [error, setError] = useState("");
   const pickerRef = useRef(null);
 
@@ -58,13 +59,17 @@ export default function MetadataCacheRefresh({ onBack }) {
     event.preventDefault();
     setRefreshing(true);
     setResult(null);
+    setProgress({ total: recordType === "__all__" ? recordTypes.length : 1, processed: 0, updated: 0, failed: 0 });
     setError("");
     try {
-      const data = await apiRequest(
+      const data = await apiStreamRequest(
         "/function-builder/record-details-cache/refresh",
         {
           method: "POST",
           body: JSON.stringify(recordType === "__all__" ? {} : { recordType }),
+        },
+        (event) => {
+          if (event.type === "progress") setProgress(event);
         },
       );
       setResult(data);
@@ -150,6 +155,21 @@ export default function MetadataCacheRefresh({ onBack }) {
       </form>
 
       {error && <p className="message error-message" role="alert">{error}</p>}
+      {refreshing && progress && (
+        <section className="metadata-progress" aria-live="polite" aria-atomic="true">
+          <div className="metadata-progress-heading">
+            <strong>Updating NetSuite metadata</strong>
+            <span>{progress.processed} of {progress.total} record types processed</span>
+          </div>
+          <progress max={Math.max(progress.total, 1)} value={progress.processed} aria-label="Record types processed" />
+          <p className="muted">
+            {progress.currentRecordType
+              ? `Most recently completed: ${progress.currentRecordType}`
+              : "Connecting to NetSuite and loading record types…"}
+            {progress.failed > 0 ? ` · ${progress.failed} failed` : ""}
+          </p>
+        </section>
+      )}
       {result && (
         <div className={`message ${result.failed ? "error-message" : "success-message"}`} role="status">
           Updated {result.updated} of {result.total} record types; {result.failed} failed.
